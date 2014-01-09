@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">AutoPing</string>
+    <string name="action_settings">Settings</string>
+    <string name="menu_settings">Settings</string>    
+    <string name="hello_world">Hello world!</string>
+    <string name="update_online">Network connection available!</string>
+    <string name="update_offline">No network connection available!</string>
+    <string name="btBigPictureNotification">Ping ME!!!</string>
+    <string name="tvHandleNotification">You can handle notification intent here.</string>
+    <string name="title_activity_main">Notification</string>
+
+</resources>
