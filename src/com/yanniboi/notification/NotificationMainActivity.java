@@ -26,10 +26,11 @@ import android.widget.Button;
 
 public class NotificationMainActivity extends Activity {
  
-    private static final long MINIMUM_DISTANCE_CHANGE_FOR_UPDATES = 1; // in Meters
-    private static final long MINIMUM_TIME_BETWEEN_UPDATES = 1000; // in Milliseconds
-    
+    private static final long MINIMUM_DISTANCE_CHANGE_FOR_UPDATES = 50; // in Meters
+    private static final long MINIMUM_TIME_BETWEEN_UPDATES = 1000 * 60; // in Milliseconds
+   
     protected LocationManager locationManager;
+    protected Location activeLocation;
     protected ConnectivityManager connectivityManager;
     protected Button retrieveLocationButton;
     protected Button sendLocationButton;
@@ -187,11 +188,14 @@ public class NotificationMainActivity extends Activity {
     public int sendCurrentLocation() throws IOException {
     	int siteStatus = -1;
 
-    	Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+    	if (activeLocation == null) {
+        	activeLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+    	}
+    	//Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
 
-    	if (location != null) {
-    		String lat = Double.toString(location.getLatitude());
-    		String lng = Double.toString(location.getLongitude());
+    	if (activeLocation != null) {
+    		String lat = Double.toString(activeLocation.getLatitude());
+    		String lng = Double.toString(activeLocation.getLongitude());
      
     		try {
     			String link = "http://six-gs.com/autoping/checkin?id=1234&lat=" + lat + "&lng=" + lng;
@@ -216,7 +220,22 @@ public class NotificationMainActivity extends Activity {
     			"New Location \n Longitude: %1$s \n Latitude: %2$s",
     			location.getLongitude(), location.getLatitude()
     		);
-    		Toast.makeText(NotificationMainActivity.this, message, Toast.LENGTH_LONG).show();
+    		//Toast.makeText(NotificationMainActivity.this, message, Toast.LENGTH_LONG).show();
+    		
+    		// Make sure a location is set.
+        	if (activeLocation == null) {
+            	activeLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        	}
+        	
+        	// Check if new location is better.
+        	if (isBetterLocation(location, activeLocation)) {
+        		new updateTask().execute();
+        		String distance = Float.toString(location.distanceTo(activeLocation));
+            	activeLocation = location;
+            	
+        		Toast.makeText(NotificationMainActivity.this, message + " Distance: " + distance, Toast.LENGTH_LONG).show();
+        	}
+
     	}
 
     	public void onStatusChanged(String s, int i, Bundle b) {
@@ -235,5 +254,71 @@ public class NotificationMainActivity extends Activity {
                  "Provider enabled by the user. GPS turned on",
                  Toast.LENGTH_LONG).show();
     	}
+    }
+
+    /**
+     * Determines whether one location reading is better than the current location.
+     * 
+     * @param location
+     *            The new Location that you want to evaluate
+     * @param currentBestLocation
+     *            The current Location fix, to which you want to compare the new one
+     *            
+     * @return indicates if you should use the new location
+     */
+    public static boolean isBetterLocation(Location location, Location currentBestLocation) {
+        if (currentBestLocation == null) {
+            // A new location is always better than no location
+            return true;
+        }
+
+        // Check whether the new location fix is newer or older
+        long timeDelta = location.getTime() - currentBestLocation.getTime();
+        boolean isSignificantlyNewer = timeDelta > MINIMUM_TIME_BETWEEN_UPDATES;
+        boolean isSignificantlyOlder = timeDelta < - MINIMUM_TIME_BETWEEN_UPDATES;
+        boolean isNewer = timeDelta > 0;
+
+        // If it's been more than two minutes since the current location, use the new location
+        // because the user has likely moved
+        if (isSignificantlyNewer) {
+            return true;
+            // If the new location is more than two minutes older, it must be worse
+        } else if (isSignificantlyOlder) {
+            return false;
+        }
+
+        // Check whether the new location fix is more or less accurate
+        int accuracyDelta = (int) (location.getAccuracy() - currentBestLocation.getAccuracy());
+        boolean isLessAccurate = accuracyDelta > 0;
+        boolean isMoreAccurate = accuracyDelta < 0;
+        boolean isSignificantlyLessAccurate = accuracyDelta > 200;
+
+        // Check if the old and new location are from the same locationProvider
+        boolean isFromSameProvider = isSameProvider(location.getProvider(), currentBestLocation.getProvider());
+
+        // Determine location quality using a combination of timeliness and accuracy
+        if (isMoreAccurate) {
+            return true;
+        } else if (isNewer && !isLessAccurate) {
+            return true;
+        } else if (isNewer && !isSignificantlyLessAccurate && isFromSameProvider) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Validates if the provider are equal.
+     * 
+     * @param provider1 - provider
+     * @param provider2 - provider
+     * 
+     * @return <code>TRUE</code> if the provider are the same
+     */
+    public static boolean isSameProvider(String provider1, String provider2) {
+        if (provider1 == null) {
+            return provider2 == null;
+        }
+        return provider1.equals(provider2);
     }
 }
